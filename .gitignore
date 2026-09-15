@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Entornos virtuales
+.venv/
+venv/
+env/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Empaquetado
+*.spec
+!verbasizer.spec
+
+# Modelos de spaCy — se instalan como dependencia, no se versionan
+*.whl
+models/
+
+# Sesiones de trabajo del usuario
+sessions/
+*.verbasizer.json
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+
+# Editores
+.vscode/
+.idea/
+*.swp
