@@ -68,13 +68,45 @@ matemática pura. Eso significa que una vez etiquetada una sesión, todo el rest
 
 Ver `docs/decisiones/` para el detalle y las razones.
 
-## Uso
+## Instalación
 
-Por ahora solo desde la línea de comandos. No hace falta instalar nada: el motor es
-Python puro.
+El motor no tiene dependencias, pero conviene un entorno virtual: los Python instalados
+por Homebrew o por el sistema rechazan instalar paquetes fuera de uno (PEP 668).
 
 ```bash
-PYTHONPATH=src python -m verbasizer.cli generate texto.txt -c 5 -n 8
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e ".[dev]"
+```
+
+Eso deja disponible el comando `verbasizer` y las herramientas de test. Cada vez que
+abrís una terminal nueva hay que reactivar el entorno con `source .venv/bin/activate`.
+
+Sin instalar nada, el motor también corre directo:
+
+```bash
+PYTHONPATH=src python3 -m verbasizer.cli generate texto.txt
+```
+
+### Etiquetado gramatical (opcional)
+
+Hace falta solo para la restricción gramatical por columna. Agrega spaCy y los
+modelos de idioma:
+
+```bash
+pip install -e ".[server,dev]"
+python -m spacy download es_core_news_sm
+python -m spacy download en_core_web_sm
+```
+
+Los modelos pesan unos 13 MB cada uno. Sin ellos, todo lo demás funciona igual.
+
+## Uso
+
+Por ahora solo desde la línea de comandos.
+
+```bash
+verbasizer generate texto.txt -c 5 -n 8
 ```
 
 Cut-up por palabra, cinco columnas, ocho líneas. Cada tirada informa su semilla; pasarla
@@ -92,25 +124,52 @@ Opciones que importan:
 | `--show-origin` | Mostrar de qué columna y fuente vino cada fragmento |
 | `--strip-punctuation` | Descartar la puntuación (por defecto se conserva) |
 | `-o, --save` | Guardar la sesión como JSON |
+| `--lang es\|en` | Etiquetar gramaticalmente con spaCy |
+| `--by-pos` | Una columna por categoría: `--by-pos NOUN,VERB,ADJ`. Requiere `--lang` |
 
 Se le pueden pasar varias fuentes a la vez: es ahí donde aparecen los *intersection
 points* de Burroughs, las colisiones entre textos que no tienen nada que ver.
 
 ```bash
-PYTHONPATH=src python -m verbasizer.cli generate diario.txt informe.txt \
-    -c 3 -u 4 -w 1,8,1 -n 6 -l 3 --show-origin
+verbasizer generate diario.txt informe.txt -c 3 -u 4 -w 1,8,1 -n 6 -l 3 --show-origin
+```
+
+Columnas restringidas por categoría gramatical — la configuración que describía Ty
+Roberts, y lo que ninguna otra herramienta de cut-up implementa:
+
+```bash
+verbasizer generate uno.txt dos.txt --lang es --by-pos NOUN,VERB,ADJ -w 1,5,1
 ```
 
 Tests:
 
 ```bash
-PYTHONPATH=src python -m pytest tests/ -q
+pytest -q
 ```
+
+## API
+
+```bash
+verbasizer serve
+```
+
+Levanta en `http://127.0.0.1:8000`. Documentación interactiva en `/docs`.
+
+| Endpoint | Qué hace |
+|---|---|
+| `GET /api/health` | Estado y qué modelos de idioma están instalados |
+| `POST /api/tag` | Tokeniza un texto, con etiquetado gramatical si se pide idioma |
+| `POST /api/distribute` | Reparte tokens en columnas: uno a uno, o por categoría |
+| `POST /api/generate` | Genera una tirada, con la procedencia de cada fragmento |
+
+La API es chica a propósito. Lo único que exige servidor es el etiquetado, porque
+spaCy es Python y el navegador no puede correrlo; el resto puede vivir del lado del
+cliente una vez que los tokens están etiquetados.
 
 ## Hoja de ruta
 
 1. ~~Motor + CLI mínimo~~ ✅
-2. API
+2. ~~API~~ ✅
 3. Interfaz de columnas
 4. Curaduría (bandeja, lock, historial, procedencia)
 5. Módulos históricos (cuadrantes, fold-in, tres columnas, permutación de Gysin)

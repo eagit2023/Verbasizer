@@ -11,6 +11,7 @@ import sys
 from pathlib import Path
 
 from .engine import Session, Source, generate, round_robin, to_fragments, tokenize
+from .engine.columns import by_pos
 
 
 def _parse_weights(raw: str | None, count: int) -> list[float]:
@@ -47,6 +48,19 @@ def build_parser() -> argparse.ArgumentParser:
         help="Archivos de texto de entrada (uno o más)",
     )
     gen.add_argument("-c", "--columns", type=int, default=5, help="Cantidad de columnas")
+    gen.add_argument(
+        "--lang",
+        choices=["es", "en"],
+        help="Etiquetar gramaticalmente con spaCy. Sin esto no hay restricción por columna.",
+    )
+    gen.add_argument(
+        "--by-pos",
+        metavar="CATEGORIAS",
+        help=(
+            "Una columna por categoría gramatical, separadas por coma "
+            "(ej: NOUN,VERB,ADJ). Requiere --lang. Ignora --columns."
+        ),
+    )
     gen.add_argument(
         "-w",
         "--weights",
@@ -90,10 +104,38 @@ def build_parser() -> argparse.ArgumentParser:
     )
     gen.add_argument("-o", "--save", type=Path, help="Guardar la sesión como JSON")
 
+    serve = sub.add_parser("serve", help="Levantar la API")
+    serve.add_argument("--host", default="127.0.0.1")
+    serve.add_argument("--port", type=int, default=8000)
+    serve.add_argument("--reload", action="store_true", help="Recargar al editar código")
+
     return parser
 
 
+def cmd_serve(args: argparse.Namespace) -> int:
+    try:
+        import uvicorn
+    except ImportError:
+        print(
+            'Falta el extra del servidor. Instalalo con:\n    pip install -e ".[server]"',
+            file=sys.stderr,
+        )
+        return 1
+
+    uvicorn.run(
+        "verbasizer.api.app:app",
+        host=args.host,
+        port=args.port,
+        reload=args.reload,
+    )
+    return 0
+
+
 def cmd_generate(args: argparse.Namespace) -> int:
+    if args.by_pos and not args.lang:
+        print("--by-pos necesita --lang: hay que etiquetar antes de agrupar.", file=sys.stderr)
+        return 1
+
     session = Session(
         name=", ".join(p.stem for p in args.sources),
         unit=args.unit,
@@ -106,34 +148,71 @@ def cmd_generate(args: argparse.Namespace) -> int:
             print(f"No encuentro el archivo: {path}", file=sys.stderr)
             return 1
         text = path.read_text(encoding="utf-8")
-        tokens = tokenize(text, source=path.stem, keep_punctuation=session.keep_punctuation)
+
+        if args.lang:
+            from .tagging import TaggerUnavailable, tag
+
+            try:
+                tokens = tag(
+                    text,
+                    source=path.stem,
+                    lang=args.lang,
+                    keep_punctuation=session.keep_punctuation,
+                )
+            except TaggerUnavailable as exc:
+                print(str(exc), file=sys.stderr)
+                return 1
+        else:
+            tokens = tokenize(
+                text, source=path.stem, keep_punctuation=session.keep_punctuation
+            )
+
         if not tokens:
             print(f"El archivo {path} no tiene texto utilizable.", file=sys.stderr)
             return 1
-        session.sources.append(Source(name=path.stem, text=text, tokens=tokens))
+        session.sources.append(
+            Source(name=path.stem, text=text, lang=args.lang, tokens=tokens)
+        )
         all_tokens.extend(tokens)
 
     fragments = to_fragments(all_tokens, unit=args.unit)
-    if len(fragments) < args.columns:
-        print(
-            f"Hay {len(fragments)} fragmentos para {args.columns} columnas. "
-            "Cargá más texto o bajá la cantidad de columnas.",
-            file=sys.stderr,
-        )
-        return 1
 
-    session.columns = round_robin(fragments, args.columns)
-    for column, weight in zip(session.columns, _parse_weights(args.weights, args.columns)):
+    if args.by_pos:
+        categories = [c.strip().upper() for c in args.by_pos.split(",") if c.strip()]
+        session.columns = by_pos(fragments, categories)
+        vacias = [c.name for c in session.columns if not c.eligible()]
+        if vacias:
+            print(
+                f"Sin material para: {', '.join(vacias)}. Esas columnas quedan mudas.",
+                file=sys.stderr,
+            )
+        weights = _parse_weights(args.weights, len(session.columns))
+    else:
+        if len(fragments) < args.columns:
+            print(
+                f"Hay {len(fragments)} fragmentos para {args.columns} columnas. "
+                "Cargá más texto o bajá la cantidad de columnas.",
+                file=sys.stderr,
+            )
+            return 1
+        session.columns = round_robin(fragments, args.columns)
+        weights = _parse_weights(args.weights, args.columns)
+
+    for column, weight in zip(session.columns, weights):
         column.weight = weight
 
-    generation = generate(
-        session.columns,
-        rule=_parse_rule(args.rule),
-        lines=args.lines,
-        words_per_line=args.length,
-        seed=args.seed,
-        avoid_repeats=not args.allow_repeats,
-    )
+    try:
+        generation = generate(
+            session.columns,
+            rule=_parse_rule(args.rule),
+            lines=args.lines,
+            words_per_line=args.length,
+            seed=args.seed,
+            avoid_repeats=not args.allow_repeats,
+        )
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
     session.generations.append(generation)
 
     for line in generation.lines:
@@ -158,6 +237,8 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     if args.command == "generate":
         return cmd_generate(args)
+    if args.command == "serve":
+        return cmd_serve(args)
     return 1
 
 

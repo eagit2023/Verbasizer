@@ -18,17 +18,29 @@ from typing import Any
 
 from .columns import Column
 from .generator import Generation
-from .tokens import Fragment, Line, Placement, Token
+from .serialization import (
+    column_from_dict,
+    column_to_dict,
+    generation_from_dict,
+    generation_to_dict,
+    token_from_dict,
+    token_to_dict,
+)
+from .tokens import Token
 
 FORMAT_VERSION = 1
 
 
 @dataclass
 class Source:
-    """Un texto cargado, con sus tokens ya extraídos."""
+    """Un texto cargado, con sus tokens ya extraídos.
+
+    `lang` queda en None si el texto se tokenizó sin etiquetador.
+    """
 
     name: str
     text: str
+    lang: str | None = None
     tokens: list[Token] = field(default_factory=list)
 
 
@@ -67,39 +79,13 @@ class Session:
                 {
                     "name": s.name,
                     "text": s.text,
-                    "tokens": [_token_to_dict(t) for t in s.tokens],
+                    "lang": s.lang,
+                    "tokens": [token_to_dict(t) for t in s.tokens],
                 }
                 for s in self.sources
             ],
-            "columns": [
-                {
-                    "name": c.name,
-                    "weight": c.weight,
-                    "pos_filter": c.pos_filter,
-                    "locked": c.locked,
-                    "fragments": [
-                        [_token_to_dict(t) for t in f.tokens] for f in c.fragments
-                    ],
-                }
-                for c in self.columns
-            ],
-            "generations": [
-                {
-                    "seed": g.seed,
-                    "rule": g.rule,
-                    "lines": [
-                        [
-                            {
-                                "column": p.column,
-                                "tokens": [_token_to_dict(t) for t in p.fragment.tokens],
-                            }
-                            for p in line.placements
-                        ]
-                        for line in g.lines
-                    ],
-                }
-                for g in self.generations
-            ],
+            "columns": [column_to_dict(c) for c in self.columns],
+            "generations": [generation_to_dict(g) for g in self.generations],
             "saved": list(self.saved),
         }
 
@@ -124,37 +110,16 @@ class Session:
                 Source(
                     name=raw["name"],
                     text=raw["text"],
-                    tokens=[_token_from_dict(t) for t in raw.get("tokens", [])],
+                    lang=raw.get("lang"),
+                    tokens=[token_from_dict(t) for t in raw.get("tokens", [])],
                 )
             )
 
         for raw in data.get("columns", []):
-            session.columns.append(
-                Column(
-                    name=raw["name"],
-                    weight=raw.get("weight", 1.0),
-                    pos_filter=raw.get("pos_filter"),
-                    locked=raw.get("locked", False),
-                    fragments=[
-                        Fragment(tuple(_token_from_dict(t) for t in frag))
-                        for frag in raw.get("fragments", [])
-                    ],
-                )
-            )
+            session.columns.append(column_from_dict(raw))
 
         for raw in data.get("generations", []):
-            generation = Generation(seed=raw["seed"], rule=list(raw["rule"]))
-            for raw_line in raw.get("lines", []):
-                line = Line()
-                for raw_placement in raw_line:
-                    fragment = Fragment(
-                        tuple(_token_from_dict(t) for t in raw_placement["tokens"])
-                    )
-                    line.placements.append(
-                        Placement(fragment=fragment, column=raw_placement["column"])
-                    )
-                generation.lines.append(line)
-            session.generations.append(generation)
+            session.generations.append(generation_from_dict(raw))
 
         return session
 
@@ -168,22 +133,3 @@ class Session:
     def load(cls, path: str | Path) -> Session:
         return cls.from_dict(json.loads(Path(path).read_text(encoding="utf-8")))
 
-
-def _token_to_dict(token: Token) -> dict[str, Any]:
-    return {
-        "text": token.text,
-        "source": token.source,
-        "line": token.line,
-        "position": token.position,
-        "pos": token.pos,
-    }
-
-
-def _token_from_dict(data: dict[str, Any]) -> Token:
-    return Token(
-        text=data["text"],
-        source=data["source"],
-        line=data["line"],
-        position=data["position"],
-        pos=data.get("pos"),
-    )
