@@ -4,8 +4,7 @@ Herramienta de cut-up: reconstrucción del software que Ty Roberts construyó pa
 David Bowie entre 1994 y 1995, más los métodos manuales de William S. Burroughs y
 Brion Gysin que lo precedieron.
 
-**Estado: pre-alfa.** No hay nada funcional todavía. Este repositorio arranca con la
-investigación histórica documentada y la arquitectura definida; el código viene después.
+**Estado: pre-alfa.** El motor funciona y tiene tests. No hay interfaz todavía.
 
 ---
 
@@ -69,9 +68,48 @@ matemática pura. Eso significa que una vez etiquetada una sesión, todo el rest
 
 Ver `docs/decisiones/` para el detalle y las razones.
 
+## Uso
+
+Por ahora solo desde la línea de comandos. No hace falta instalar nada: el motor es
+Python puro.
+
+```bash
+PYTHONPATH=src python -m verbasizer.cli generate texto.txt -c 5 -n 8
+```
+
+Cut-up por palabra, cinco columnas, ocho líneas. Cada tirada informa su semilla; pasarla
+con `-s` reproduce el resultado exacto.
+
+Opciones que importan:
+
+| Opción | Qué hace |
+|---|---|
+| `-c, --columns` | Cantidad de columnas |
+| `-w, --weights` | Peso por columna: `-w 1,8,1,1,2`. Peso 0 la silencia |
+| `-u, --unit` | Palabras por fragmento. `1` = palabra suelta; `4` o `5` = el método manual de Bowie |
+| `-r, --rule` | Plantilla de estructura: `-r 6,4,6,4` fragmentos por línea, cíclica |
+| `-s, --seed` | Reproducir una tirada anterior |
+| `--show-origin` | Mostrar de qué columna y fuente vino cada fragmento |
+| `--strip-punctuation` | Descartar la puntuación (por defecto se conserva) |
+| `-o, --save` | Guardar la sesión como JSON |
+
+Se le pueden pasar varias fuentes a la vez: es ahí donde aparecen los *intersection
+points* de Burroughs, las colisiones entre textos que no tienen nada que ver.
+
+```bash
+PYTHONPATH=src python -m verbasizer.cli generate diario.txt informe.txt \
+    -c 3 -u 4 -w 1,8,1 -n 6 -l 3 --show-origin
+```
+
+Tests:
+
+```bash
+PYTHONPATH=src python -m pytest tests/ -q
+```
+
 ## Hoja de ruta
 
-1. Motor + CLI mínimo
+1. ~~Motor + CLI mínimo~~ ✅
 2. API
 3. Interfaz de columnas
 4. Curaduría (bandeja, lock, historial, procedencia)

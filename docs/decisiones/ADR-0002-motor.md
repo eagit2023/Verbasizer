@@ -1,7 +1,7 @@
 # ADR-0002 — Semántica del motor
 
 **Fecha:** 2026-09-15
-**Estado:** PROPUESTA — no decidida. No implementar hasta acordar.
+**Estado:** aceptada
 
 ## Contexto
 
@@ -16,9 +16,12 @@ histórica: son diseño nuestro, y quedan registradas como tales.
 **Hueco:** no se sabe si el Verbasizer trabajaba con palabras sueltas o con sintagmas.
 Bowie a mano cortaba fragmentos de 4-5 palabras; en el software parece haber sido palabra.
 
-**Propuesta:** configurable, **default palabra**. El modo sintagma se cubre con el
+**Decisión:** configurable, **default palabra**. El modo sintagma se cubre con el
 parámetro de tamaño de fragmento, que además permite reproducir el método manual de
 Bowie.
+
+**Implementación:** un fragmento nunca cruza el límite de una frase ni mezcla fuentes. Un
+tramo de cinco palabras tiene que ser un tramo real del original para significar algo.
 
 ---
 
@@ -26,9 +29,13 @@ Bowie.
 
 **Hueco:** Roberts dice que las columnas *"could be weighted"* y nada más.
 
-**Propuesta: ruleta.** El peso es la probabilidad relativa de que esa columna aporte la
-siguiente palabra al armar la línea. Peso 3 contra peso 1 significa que aparece tres
+**Decisión: ruleta.** El peso es la probabilidad relativa de que esa columna aporte el
+siguiente fragmento al armar la línea. Peso 3 contra peso 1 significa que aparece tres
 veces más seguido.
+
+**Implementación:** la ruleta se calcula solo sobre las columnas *utilizables* — peso
+mayor a cero y con al menos un fragmento que pase su restricción gramatical. Un peso de
+cero silencia la columna sin borrarla.
 
 **Alternativa considerada y descartada:** que el peso fije cuántos slots ocupa la columna
 en cada línea. Produce resultados rígidos y previsibles — la misma forma en todas las
@@ -40,9 +47,17 @@ líneas — que es lo contrario de lo que se busca.
 
 **Hueco:** `[supuesto]` que en el original la declaración era manual por columna.
 
-**Propuesta: declaración manual, con el etiquetador sugiriendo.** Al cargar un texto,
+**Decisión: declaración manual, con el etiquetador sugiriendo.** Al cargar un texto,
 spaCy clasifica automáticamente cada palabra; el usuario decide qué categoría lleva cada
 columna. Se respeta el comportamiento histórico y se elimina el trabajo tedioso.
+
+**Implementación:** el motor **no etiqueta**. Recibe tokens con o sin categoría y filtra
+según lo que le hayan puesto; el etiquetado es responsabilidad del backend (fase 2). Eso
+mantiene el motor sin dependencias y testeable.
+
+**Convención propia:** cuando la unidad atómica es mayor a una palabra, un fragmento no
+tiene una sola categoría gramatical. Se usa la del **primer token** del fragmento. No hay
+antecedente histórico para esto; es decisión nuestra.
 
 ---
 
