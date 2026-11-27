@@ -4,7 +4,8 @@ Herramienta de cut-up: reconstrucción del software que Ty Roberts construyó pa
 David Bowie entre 1994 y 1995, más los métodos manuales de William S. Burroughs y
 Brion Gysin que lo precedieron.
 
-**Estado: pre-alfa.** El motor funciona y tiene tests. No hay interfaz todavía.
+**Estado: pre-alfa.** Aplicación de escritorio para macOS (Apple Silicon) y
+Windows 11. Corre entera en la máquina: sin servidor, sin cuenta, sin internet.
 
 ---
 
@@ -47,24 +48,31 @@ ruido a esa pila.
 ```
 docs/research/      Reconstrucción histórica, con fuentes
 docs/decisiones/    Registro de decisiones de arquitectura (ADR)
-src/verbasizer/     Motor, API y CLI
-web/                Interfaz de navegador
-tests/              Tests del motor
+src/verbasizer/     Motor, servicio, aplicación de escritorio y CLI
+web/                Interfaz (HTML/CSS/JS)
+packaging/          Configuración de PyInstaller
+.github/workflows/  Compilación automática para macOS y Windows
+tests/              Tests
 ```
 
 ## Arquitectura
 
-- **Motor**: Python puro, sin dependencias, determinístico dado un seed. No sabe que
-  existe HTTP. Sirve igual desde la API o desde la línea de comandos.
-- **Backend**: FastAPI. Dos responsabilidades: exponer el motor y etiquetar
-  gramaticalmente con spaCy (castellano e inglés).
-- **Frontend**: JavaScript sin build step, sin framework. Es un proyecto sobre
+- **Motor**: Python puro, sin dependencias, determinístico dado un seed.
+- **Servicio**: las operaciones de la aplicación (etiquetar, repartir, generar,
+  regenerar) como funciones que reciben y devuelven JSON simple.
+- **Ventana**: pywebview. Abre una ventana nativa —WebKit en macOS, WebView2 en
+  Windows— y deja que la interfaz llame al servicio **directamente**, sin HTTP: cada
+  llamada es una Promise del lado de JavaScript, y corre en su propio hilo para no
+  congelar la ventana.
+- **Interfaz**: JavaScript sin build step, sin framework. Es un proyecto sobre
   preservación de software; un bundle armado hoy no compila en cinco años.
-- **Persistencia**: archivos JSON. Una sesión, un archivo. Sin base de datos.
+- **Etiquetado gramatical**: spaCy, castellano e inglés.
+- **Persistencia**: archivos JSON elegidos con diálogos del sistema. Una sesión, un
+  archivo. Sin base de datos.
 
-El etiquetado gramatical ocurre **una sola vez, al cargar cada fuente**. Generar es
-matemática pura. Eso significa que una vez etiquetada una sesión, todo el resto
-—columnas, pesos, generación, curaduría— funciona sin servidor.
+pywebview levanta internamente un servidor local solo para entregar los archivos de
+la interfaz. No se configura, escucha solo en la propia máquina y no participa de las
+llamadas al motor.
 
 Ver `docs/decisiones/` para el detalle y las razones.
 
@@ -94,12 +102,15 @@ Hace falta solo para la restricción gramatical por columna. Agrega spaCy y los
 modelos de idioma:
 
 ```bash
-pip install -e ".[server,dev]"
+pip install -e ".[desktop,dev]"
 python -m spacy download es_core_news_sm
 python -m spacy download en_core_web_sm
 ```
 
 Los modelos pesan unos 13 MB cada uno. Sin ellos, todo lo demás funciona igual.
+
+`desktop` incluye pywebview, que instala por su cuenta lo que corresponde a cada
+sistema: `pyobjc` en macOS, `pythonnet` en Windows.
 
 ## Uso
 
@@ -147,33 +158,109 @@ Tests:
 pytest -q
 ```
 
-## API
+## Interfaz
+
+Desde el código:
 
 ```bash
-verbasizer serve
+verbasizer-app            # o: verbasizer-app --debug, con herramientas de inspección
 ```
 
-Levanta en `http://127.0.0.1:8000`. Documentación interactiva en `/docs`.
+O con la aplicación compilada, ver más abajo. El flujo es el del Verbasizer original,
+en cinco pasos:
 
-| Endpoint | Qué hace |
-|---|---|
-| `GET /api/health` | Estado y qué modelos de idioma están instalados |
-| `POST /api/tag` | Tokeniza un texto, con etiquetado gramatical si se pide idioma |
-| `POST /api/distribute` | Reparte tokens en columnas: uno a uno, o por categoría |
-| `POST /api/generate` | Genera una tirada, con la procedencia de cada fragmento |
+1. **Fuentes** — pegá o subí dos o más textos. El idioma solo hace falta si vas a usar
+   categorías gramaticales.
+2. **Columnas** — repartí uno a uno o por categoría. Cada columna tiene su peso
+   ajustable y su restricción gramatical.
+3. **Generar** — líneas, largo o regla, semilla. Clic en un fragmento para **fijarlo**;
+   "Regenerar sin tocar lo fijado" vuelve a tirar preservando lo que ya funcionaba.
+4. **Bandeja** — las líneas que se salvan. "Usar como fuente" las devuelve al circuito,
+   que es el fold-in aplicado al propio material.
+5. **Historial** — cada tirada con su semilla, para volver a cualquiera.
 
-La API es chica a propósito. Lo único que exige servidor es el etiquetado, porque
-spaCy es Python y el navegador no puede correrlo; el resto puede vivir del lado del
-cliente una vez que los tokens están etiquetados.
+Los colores indican de qué fuente vino cada fragmento. Atajos: `g` genera, `r` regenera.
+
+Las sesiones se guardan y se abren como archivo con "Guardar sesión" y "Abrir sesión",
+usando los diálogos del sistema. La bandeja se puede exportar como `.txt`.
+
+## Aplicación de escritorio
+
+### Descargar
+
+Los binarios compilados están en la sección **Releases** del repositorio:
+
+- `Verbasizer-macos-arm64.zip` — macOS con Apple Silicon (M1 en adelante)
+- `Verbasizer-windows-x64.zip` — Windows 11 x64
+
+No hace falta instalar Python ni nada más: todo viaja adentro.
+
+### Primer arranque
+
+La aplicación no está firmada con un certificado de desarrollador, así que el
+sistema avisa la primera vez. Es esperable.
+
+**macOS.** Descomprimir y mover `Verbasizer.app` a Aplicaciones. Al abrirla, macOS
+dice que no puede verificar al desarrollador. Clic derecho sobre la app → **Abrir** →
+**Abrir**. Si no ofrece la opción: Ajustes del Sistema → Privacidad y seguridad →
+**Abrir igualmente**. Solo la primera vez.
+
+**Windows.** Descomprimir la carpeta completa —el `.exe` necesita lo que tiene al
+lado— y abrir `Verbasizer.exe`. SmartScreen muestra "Windows protegió su PC":
+**Más información** → **Ejecutar de todas formas**. Solo la primera vez.
+
+Windows necesita el runtime **WebView2**, que la aplicación usa para dibujar la
+ventana. Viene con Windows 11 actualizado; si faltara, Microsoft lo distribuye como
+"WebView2 Runtime".
+
+### Verificar una instalación
+
+```bash
+# macOS
+Verbasizer.app/Contents/MacOS/Verbasizer --selftest
+
+# Windows (PowerShell): la app no tiene consola, el reporte va a archivo
+Start-Process .\Verbasizer.exe -ArgumentList "--selftest","--report","reporte.json" -Wait
+Get-Content reporte.json
+```
+
+Recorre el circuito completo —modelos, etiquetado, reparto, generación— sin abrir
+ventana, y dice si algo falta.
+
+### Compilar
+
+Se compila solo en GitHub Actions al publicar un tag de versión:
+
+```bash
+git tag v0.2.0
+git push --tags
+```
+
+Cada plataforma corre los tests, compila, **ejecuta el autotest dentro del binario
+compilado** y, si todo pasa, lo adjunta a un Release en borrador para revisarlo antes
+de publicarlo. También se puede disparar a mano desde la pestaña Actions.
+
+Para compilar localmente, en la plataforma de destino:
+
+```bash
+pip install -e ".[desktop,build]"
+python -m spacy download es_core_news_sm
+python -m spacy download en_core_web_sm
+pyinstaller packaging/verbasizer.spec --noconfirm
+```
+
+**Medido** (compilación en Linux, como referencia; macOS y Windows pueden variar):
+294 MB descomprimido, 123 MB comprimido, autotest completo en 1,2 s. Más de un
+tercio del peso son las extensiones compiladas de spaCy, que no se pueden recortar.
 
 ## Hoja de ruta
 
 1. ~~Motor + CLI mínimo~~ ✅
-2. ~~API~~ ✅
-3. Interfaz de columnas
-4. Curaduría (bandeja, lock, historial, procedencia)
-5. Módulos históricos (cuadrantes, fold-in, tres columnas, permutación de Gysin)
-6. Empaquetado como aplicación de escritorio
+2. ~~Etiquetado gramatical~~ ✅
+3. ~~Interfaz de columnas~~ ✅
+4. ~~Curaduría (bandeja, lock, historial, procedencia)~~ ✅
+5. ~~Aplicación de escritorio para macOS y Windows~~ ✅
+6. Módulos históricos (cuadrantes, fold-in, tres columnas, permutación de Gysin)
 
 ## Licencia
 

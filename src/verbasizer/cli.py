@@ -104,31 +104,18 @@ def build_parser() -> argparse.ArgumentParser:
     )
     gen.add_argument("-o", "--save", type=Path, help="Guardar la sesión como JSON")
 
-    serve = sub.add_parser("serve", help="Levantar la API")
-    serve.add_argument("--host", default="127.0.0.1")
-    serve.add_argument("--port", type=int, default=8000)
-    serve.add_argument("--reload", action="store_true", help="Recargar al editar código")
+    sub.add_parser("app", help="Abrir la aplicación de escritorio")
 
     return parser
 
 
-def cmd_serve(args: argparse.Namespace) -> int:
+def cmd_app() -> int:
     try:
-        import uvicorn
-    except ImportError:
-        print(
-            'Falta el extra del servidor. Instalalo con:\n    pip install -e ".[server]"',
-            file=sys.stderr,
-        )
+        from .desktop import run
+    except ImportError as exc:  # pragma: no cover
+        print(f"No se puede abrir la aplicación: {exc}", file=sys.stderr)
         return 1
-
-    uvicorn.run(
-        "verbasizer.api.app:app",
-        host=args.host,
-        port=args.port,
-        reload=args.reload,
-    )
-    return 0
+    return run()
 
 
 def cmd_generate(args: argparse.Namespace) -> int:
@@ -237,8 +224,8 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     if args.command == "generate":
         return cmd_generate(args)
-    if args.command == "serve":
-        return cmd_serve(args)
+    if args.command == "app":
+        return cmd_app()
     return 1
 
 

@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Verbasizer</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%238a3324'/%3E%3Cpath d='M3 3h3v10H3zM7 3h2v10H7zM10 3h3v10h-3z' fill='%23fff' opacity='.85'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+
+<header class="topbar">
+  <h1>Verbasizer</h1>
+  <div class="topbar-actions">
+    <span id="server-status" class="status" title="Estado del motor">···</span>
+    <button id="btn-import" class="ghost">Abrir sesión</button>
+    <button id="btn-export" class="ghost">Guardar sesión</button>
+  </div>
+</header>
+
+<main>
+
+  <!-- ---------------------------------------------------------- fuentes -->
+  <section class="panel" id="panel-fuentes">
+    <h2>1 · Fuentes</h2>
+    <p class="hint">
+      Cargá dos o más textos que no tengan nada que ver entre sí. Ahí es donde
+      aparecen las colisiones que valen la pena.
+    </p>
+
+    <div class="source-form">
+      <div class="row">
+        <label>Nombre
+          <input type="text" id="source-name" placeholder="diario">
+        </label>
+        <label>Idioma
+          <select id="source-lang">
+            <option value="">sin etiquetar</option>
+            <option value="es" selected>castellano</option>
+            <option value="en">inglés</option>
+          </select>
+        </label>
+        <button id="btn-file-source" class="ghost" type="button">Abrir archivo…</button>
+      </div>
+      <textarea id="source-text" rows="5" placeholder="Pegá el texto acá…"></textarea>
+      <div class="row">
+        <button id="btn-add-source">Agregar fuente</button>
+        <span class="hint" id="source-note">
+          El idioma solo hace falta para restringir columnas por categoría gramatical.
+        </span>
+      </div>
+    </div>
+
+    <ul class="sources" id="sources-list"></ul>
+  </section>
+
+  <!-- --------------------------------------------------------- columnas -->
+  <section class="panel" id="panel-columnas">
+    <h2>2 · Columnas</h2>
+
+    <div class="row controls">
+      <label>Reparto
+        <select id="mode">
+          <option value="round_robin">uno a uno</option>
+          <option value="by_pos">por categoría gramatical</option>
+        </select>
+      </label>
+      <label id="label-count">Columnas
+        <input type="number" id="column-count" value="4" min="1" max="12">
+      </label>
+      <label id="label-categories" hidden>Categorías
+        <input type="text" id="categories" value="NOUN,VERB,ADJ">
+      </label>
+      <label>Unidad
+        <input type="number" id="unit" value="1" min="1" max="10">
+        <small>palabras por fragmento</small>
+      </label>
+      <button id="btn-distribute">Repartir</button>
+    </div>
+
+    <div class="columns" id="columns-list"></div>
+  </section>
+
+  <!-- ---------------------------------------------------------- generar -->
+  <section class="panel" id="panel-generar">
+    <h2>3 · Generar</h2>
+
+    <div class="row controls">
+      <label>Líneas
+        <input type="number" id="lines" value="8" min="1" max="200">
+      </label>
+      <label>Largo
+        <input type="number" id="length" value="5" min="1" max="30">
+        <small>fragmentos por línea</small>
+      </label>
+      <label>Regla
+        <input type="text" id="rule" placeholder="6,3,6,3">
+        <small>opcional, anula el largo</small>
+      </label>
+      <label>Semilla
+        <input type="text" id="seed" placeholder="al azar">
+        <small id="seed-last">&nbsp;</small>
+      </label>
+      <label class="check">
+        <input type="checkbox" id="avoid-repeats" checked>
+        <span>sin repetir en la línea</span>
+      </label>
+    </div>
+
+    <div class="row">
+      <button id="btn-generate" class="primary">Generar</button>
+      <button id="btn-regenerate" disabled title="Vuelve a tirar preservando lo que bloqueaste">
+        Regenerar sin tocar lo fijado
+      </button>
+      <button id="btn-clear-locks" class="ghost" disabled>Soltar todo</button>
+    </div>
+
+    <p class="hint">
+      Clic en un fragmento para fijarlo. Clic en la flecha de la izquierda de una
+      línea para mandarla a la bandeja.
+    </p>
+
+    <div id="output" class="output"></div>
+  </section>
+
+  <!-- ---------------------------------------------------- bandeja/histor -->
+  <div class="two-up">
+
+    <section class="panel" id="panel-bandeja">
+      <h2>4 · Bandeja</h2>
+      <p class="hint">
+        Lo que se salva. Burroughs lo llamaba <em>sifting and panning</em>: la
+        máquina produce material en bruto y el trabajo es elegir.
+      </p>
+      <ol class="tray" id="tray"></ol>
+      <div class="row">
+        <button id="btn-tray-copy" class="ghost">Copiar</button>
+        <button id="btn-tray-save" class="ghost">Guardar .txt</button>
+        <button id="btn-tray-feed" class="ghost" title="Volver a meter lo guardado como fuente">
+          Usar como fuente
+        </button>
+        <button id="btn-tray-clear" class="ghost danger">Vaciar</button>
+      </div>
+    </section>
+
+    <section class="panel" id="panel-historial">
+      <h2>5 · Historial</h2>
+      <p class="hint">Cada tirada queda acá con su semilla. Clic para volver a ella.</p>
+      <ol class="history" id="history"></ol>
+    </section>
+
+  </div>
+
+</main>
+
+<div id="toast" class="toast" hidden></div>
+
+<script src="api.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

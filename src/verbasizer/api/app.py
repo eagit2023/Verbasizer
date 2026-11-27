@@ -17,11 +17,12 @@ from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from ..engine import generate, round_robin, to_fragments, tokenize
+from ..engine import generate, regenerate, round_robin, to_fragments, tokenize
 from ..engine.columns import by_pos
 from ..engine.serialization import (
     column_from_dict,
     column_to_dict,
+    generation_from_dict,
     generation_to_dict,
     token_from_dict,
     token_to_dict,
@@ -65,6 +66,19 @@ class GenerateRequest(BaseModel):
     rule: list[int] | None = None
     lines: int = Field(default=8, ge=1, le=500)
     words_per_line: int = Field(default=6, ge=1, le=50)
+    seed: int | None = None
+    avoid_repeats: bool = True
+
+
+class RegenerateRequest(BaseModel):
+    columns: list[dict[str, Any]]
+    previous: dict[str, Any]
+    locked: list[tuple[int, int]] = Field(
+        default_factory=list,
+        description="Coordenadas (línea, posición) que no se regeneran",
+    )
+    rule: list[int] | None = None
+    lines: int | None = None
     seed: int | None = None
     avoid_repeats: bool = True
 
@@ -167,6 +181,34 @@ def generate_lines(request: GenerateRequest) -> dict[str, Any]:
             rule=request.rule,
             lines=request.lines,
             words_per_line=request.words_per_line,
+            seed=request.seed,
+            avoid_repeats=request.avoid_repeats,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    return generation_to_dict(result)
+
+
+@app.post("/api/regenerate")
+def regenerate_lines(request: RegenerateRequest) -> dict[str, Any]:
+    """Vuelve a tirar preservando las posiciones bloqueadas.
+
+    Es la curaduría: iterar sin destruir lo que ya funcionaba.
+    """
+    try:
+        columns = [column_from_dict(c) for c in request.columns]
+        previous = generation_from_dict(request.previous)
+    except (KeyError, TypeError) as exc:
+        raise HTTPException(status_code=422, detail=f"Entrada mal formada: {exc}") from exc
+
+    try:
+        result = regenerate(
+            columns,
+            previous,
+            {(line, position) for line, position in request.locked},
+            rule=request.rule,
+            lines=request.lines,
             seed=request.seed,
             avoid_repeats=request.avoid_repeats,
         )

@@ -9,7 +9,7 @@ docs/decisiones/ADR-0002-motor.md.
 """
 
 from .columns import Column, by_pos, round_robin
-from .generator import Generation, generate
+from .generator import Generation, generate, regenerate
 from .session import Session, Source
 from .tokenizer import to_fragments, tokenize
 from .tokens import Fragment, Line, Placement, Token
@@ -25,6 +25,7 @@ __all__ = [
     "Token",
     "by_pos",
     "generate",
+    "regenerate",
     "round_robin",
     "to_fragments",
     "tokenize",

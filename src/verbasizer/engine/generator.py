@@ -86,6 +86,7 @@ def generate(
     words_per_line: int = 6,
     seed: int | None = None,
     avoid_repeats: bool = True,
+    keep: dict[tuple[int, int], Placement] | None = None,
 ) -> Generation:
     """Produce una tirada.
 
@@ -96,6 +97,9 @@ def generate(
 
     `seed` se guarda en el resultado. Si no se pasa, se genera una y se registra
     igual, para que cualquier tirada sea reproducible después.
+
+    `keep` son posiciones (línea, columna) que no se regeneran. No se usa
+    directamente: para eso está `regenerate()`.
     """
     if not columns:
         raise ValueError("Hacen falta columnas para generar")
@@ -123,7 +127,12 @@ def generate(
         width = rule[index % len(rule)]
         used: set[int] = set()
         line = Line()
-        for _ in range(width):
+        for position in range(width):
+            kept = _kept_placement(keep, index, position)
+            if kept is not None:
+                line.placements.append(kept)
+                used.add(id(kept.fragment))
+                continue
             chosen = _pick_fragment(rng, columns, used, avoid_repeats)
             if chosen is None:
                 break
@@ -133,3 +142,52 @@ def generate(
         result.lines.append(line)
 
     return result
+
+
+def _kept_placement(
+    keep: dict[tuple[int, int], Placement] | None,
+    line: int,
+    position: int,
+) -> Placement | None:
+    if not keep:
+        return None
+    return keep.get((line, position))
+
+
+def regenerate(
+    columns: list[Column],
+    previous: Generation,
+    locked: set[tuple[int, int]],
+    *,
+    rule: list[int] | None = None,
+    lines: int | None = None,
+    seed: int | None = None,
+    avoid_repeats: bool = True,
+) -> Generation:
+    """Vuelve a tirar, preservando las posiciones bloqueadas.
+
+    `locked` son coordenadas (línea, posición) del resultado anterior. Lo que
+    está ahí se mantiene; todo lo demás se regenera.
+
+    Es la mecánica de curaduría que Liptikl implementaba con palabras en rojo, y
+    que ninguna otra herramienta de cut-up tiene: iterar sin destruir lo que ya
+    funcionaba. Es el "sifting and panning" de Burroughs convertido en interfaz.
+
+    Una posición bloqueada que ya no exista —porque cambió la regla y la línea
+    quedó más corta— simplemente se ignora.
+    """
+    keep: dict[tuple[int, int], Placement] = {}
+    for line_index, position in locked:
+        if 0 <= line_index < len(previous.lines):
+            placements = previous.lines[line_index].placements
+            if 0 <= position < len(placements):
+                keep[(line_index, position)] = placements[position]
+
+    return generate(
+        columns,
+        rule=rule if rule is not None else previous.rule,
+        lines=lines if lines is not None else len(previous.lines),
+        seed=seed,
+        avoid_repeats=avoid_repeats,
+        keep=keep,
+    )

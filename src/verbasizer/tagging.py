@@ -48,7 +48,7 @@ def load_model(lang: str) -> Language:
         import spacy
     except ImportError as exc:  # pragma: no cover
         raise TaggerUnavailable(
-            "spaCy no está instalado. Instalá el extra: pip install -e \".[server]\""
+            "spaCy no está instalado. Instalá el extra: pip install -e \".[nlp]\""
         ) from exc
 
     name = MODELS[lang]

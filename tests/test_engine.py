@@ -253,3 +253,71 @@ def test_la_bandeja_no_guarda_duplicados():
 def test_formato_desconocido_es_error():
     with pytest.raises(ValueError, match="Formato de sesión desconocido"):
         Session.from_dict({"format": 999})
+
+
+# ---------- lock: regeneración preservando posiciones ----------
+
+
+def test_regenerate_preserva_lo_bloqueado():
+    from verbasizer.engine import regenerate
+
+    cols = columnas(4)
+    primera = generate(cols, seed=100, lines=4, words_per_line=5)
+    bloqueadas = {(0, 0), (0, 1), (2, 3)}
+
+    segunda = regenerate(cols, primera, bloqueadas, seed=200)
+
+    for (linea, posicion) in bloqueadas:
+        antes = primera.lines[linea].placements[posicion]
+        despues = segunda.lines[linea].placements[posicion]
+        assert despues.text == antes.text
+        assert despues.column == antes.column
+
+
+def test_regenerate_cambia_lo_no_bloqueado():
+    from verbasizer.engine import regenerate
+
+    cols = columnas(4)
+    primera = generate(cols, seed=100, lines=4, words_per_line=5)
+    segunda = regenerate(cols, primera, {(0, 0)}, seed=999)
+    assert segunda.text != primera.text
+
+
+def test_regenerate_sin_bloqueos_es_una_tirada_nueva():
+    from verbasizer.engine import regenerate
+
+    cols = columnas(4)
+    primera = generate(cols, seed=100, lines=3, words_per_line=4)
+    segunda = regenerate(cols, primera, set(), seed=101)
+    assert len(segunda.lines) == len(primera.lines)
+    assert segunda.text != primera.text
+
+
+def test_regenerate_hereda_regla_y_cantidad_de_lineas():
+    from verbasizer.engine import regenerate
+
+    cols = columnas(4)
+    primera = generate(cols, seed=1, lines=6, rule=[3, 5])
+    segunda = regenerate(cols, primera, set(), seed=2)
+    assert segunda.rule == [3, 5]
+    assert [len(l.placements) for l in segunda.lines] == [3, 5, 3, 5, 3, 5]
+
+
+def test_regenerate_ignora_bloqueos_fuera_de_rango():
+    from verbasizer.engine import regenerate
+
+    cols = columnas(4)
+    primera = generate(cols, seed=1, lines=2, words_per_line=3)
+    # Coordenadas que no existen: no debe explotar.
+    segunda = regenerate(cols, primera, {(99, 99), (0, 50)}, seed=2)
+    assert len(segunda.lines) == 2
+
+
+def test_regenerate_es_reproducible():
+    from verbasizer.engine import regenerate
+
+    cols = columnas(4)
+    primera = generate(cols, seed=5, lines=3, words_per_line=4)
+    a = regenerate(cols, primera, {(1, 1)}, seed=77)
+    b = regenerate(cols, primera, {(1, 1)}, seed=77)
+    assert a.text == b.text

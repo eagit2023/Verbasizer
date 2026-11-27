@@ -1,7 +1,9 @@
 # ADR-0001 — Stack y licencia
 
 **Fecha:** 2026-09-15
-**Estado:** aceptada
+**Estado:** aceptada. Las secciones *Arquitectura* (en lo referido al backend) y
+*Empaquetado* quedan reemplazadas por [ADR-0003](ADR-0003-escritorio.md). La decisión
+de licencia y de etiquetado con spaCy sigue vigente.
 
 ## Contexto
 

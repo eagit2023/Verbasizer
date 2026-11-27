@@ -177,3 +177,50 @@ def test_generate_sin_columnas_utilizables_es_422():
 def test_generate_con_columna_mal_formada_es_422():
     r = client.post("/api/generate", json={"columns": [{"sin": "nombre"}]})
     assert r.status_code == 422
+
+
+# ---------- regenerate ----------
+
+
+def test_regenerate_preserva_lo_bloqueado():
+    columnas = _columnas(4)
+    previa = client.post(
+        "/api/generate",
+        json={"columns": columnas, "lines": 3, "words_per_line": 4, "seed": 10},
+    ).json()
+
+    nueva = client.post(
+        "/api/regenerate",
+        json={
+            "columns": columnas,
+            "previous": previa,
+            "locked": [[0, 0], [1, 2]],
+            "seed": 20,
+        },
+    ).json()
+
+    assert nueva["lines"][0]["placements"][0]["text"] == previa["lines"][0]["placements"][0]["text"]
+    assert nueva["lines"][1]["placements"][2]["text"] == previa["lines"][1]["placements"][2]["text"]
+
+
+def test_regenerate_cambia_el_resto():
+    columnas = _columnas(4)
+    previa = client.post(
+        "/api/generate",
+        json={"columns": columnas, "lines": 3, "words_per_line": 5, "seed": 10},
+    ).json()
+    nueva = client.post(
+        "/api/regenerate",
+        json={"columns": columnas, "previous": previa, "locked": [[0, 0]], "seed": 33},
+    ).json()
+    textos_previos = [l["text"] for l in previa["lines"]]
+    textos_nuevos = [l["text"] for l in nueva["lines"]]
+    assert textos_previos != textos_nuevos
+
+
+def test_regenerate_con_entrada_mal_formada_es_422():
+    r = client.post(
+        "/api/regenerate",
+        json={"columns": _columnas(2), "previous": {"sin": "seed"}, "locked": []},
+    )
+    assert r.status_code == 422
