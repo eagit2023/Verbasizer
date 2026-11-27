@@ -60,10 +60,10 @@ GitHub Actions, disparada por tag de versión:
 
 | Runner | Arquitectura | Salida |
 |---|---|---|
-| `macos-14` | arm64 (Apple Silicon) | `Verbasizer-macos-arm64.zip` |
+| `macos-latest` | arm64 (Apple Silicon) | `Verbasizer-macos-arm64.zip` |
 | `windows-2025` | x64 | `Verbasizer-windows-x64.zip` |
 
-Arquitecturas verificadas en la documentación de GitHub. Gratis e ilimitados en
+Arquitecturas verificadas en la documentación de GitHub. `macos-14` figuraba en esa documentación pero GitHub ya lo había retirado: la primera compilación falló con "configuration not supported". Por eso macOS usa `macos-latest`, que según la documentación siempre apunta a la versión estable más nueva y es arm64. Windows queda fijado en `windows-2025`. Gratis e ilimitados en
 repositorios públicos. Cada job corre los tests, compila, **ejecuta el autotest
 dentro del binario** y solo entonces lo adjunta a un Release en borrador.
 

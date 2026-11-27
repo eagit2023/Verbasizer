@@ -10,7 +10,7 @@
 # publicarlo.
 #
 # Runners verificados en la documentación de GitHub (nov. 2026):
-#   macos-14      → arm64 (Apple Silicon)
+#   macos-latest      → arm64 (Apple Silicon)
 #   windows-2025  → x64
 # Gratis e ilimitados en repositorios públicos.
 
@@ -32,7 +32,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: macos-14
+          - os: macos-latest
             label: macos-arm64
           - os: windows-2025
             label: windows-x64
