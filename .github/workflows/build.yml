@@ -1,0 +1,112 @@
+# Compila la aplicación para macOS (Apple Silicon) y Windows (x64).
+#
+# Se dispara con un tag de versión (git tag v0.2.0 && git push --tags) o a mano
+# desde la pestaña Actions. Cada plataforma:
+#   1. corre los tests,
+#   2. compila con PyInstaller,
+#   3. ejecuta el autotest DENTRO del binario compilado (motor + spaCy + modelos),
+#   4. lo comprime y lo deja como artefacto.
+# Con un tag, además lo adjunta a un Release en borrador para revisarlo antes de
+# publicarlo.
+#
+# Runners verificados en la documentación de GitHub (nov. 2026):
+#   macos-14      → arm64 (Apple Silicon)
+#   windows-2025  → x64
+# Gratis e ilimitados en repositorios públicos.
+
+name: Compilar aplicaciones
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: ${{ matrix.label }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            label: macos-arm64
+          - os: windows-2025
+            label: windows-x64
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Instalar dependencias y modelos
+        run: |
+          python -m pip install --upgrade pip
+          pip install ".[desktop,build,dev]"
+          python -m spacy download es_core_news_sm
+          python -m spacy download en_core_web_sm
+
+      - name: Tests
+        run: pytest -q
+
+      - name: Compilar
+        run: pyinstaller packaging/verbasizer.spec --noconfirm
+
+      # ---------------------------------------------------- autotest ---
+      # Verifica que el binario empaquetado trae y carga todo. Si falla acá,
+      # no se publica nada.
+
+      - name: Autotest del binario (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          dist/Verbasizer.app/Contents/MacOS/Verbasizer --selftest --report report.json
+          cat report.json
+
+      - name: Autotest del binario (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          # Es una aplicación de ventana: hay que esperarla explícitamente, y no
+          # tiene salida estándar, por eso el reporte va a archivo.
+          $p = Start-Process -FilePath "dist\Verbasizer\Verbasizer.exe" `
+                -ArgumentList "--selftest","--report","report.json" -Wait -PassThru
+          Get-Content report.json
+          if ($p.ExitCode -ne 0) { exit 1 }
+
+      # ---------------------------------------------------- empaquetar ---
+
+      - name: Comprimir (macOS)
+        if: runner.os == 'macOS'
+        # ditto conserva enlaces simbólicos y atributos del .app; zip no.
+        run: ditto -c -k --keepParent dist/Verbasizer.app "Verbasizer-${{ matrix.label }}.zip"
+
+      - name: Comprimir (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: Compress-Archive -Path dist\Verbasizer -DestinationPath "Verbasizer-${{ matrix.label }}.zip"
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: Verbasizer-${{ matrix.label }}
+          path: |
+            Verbasizer-${{ matrix.label }}.zip
+            report.json
+
+      # ---------------------------------------------------- publicar ---
+
+      - name: Adjuntar al Release (borrador)
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          # Los dos jobs pueden llegar a la vez: si el Release ya existe, seguir.
+          gh release create "$TAG" --draft --title "Verbasizer $TAG" \
+            --notes "Compilado automáticamente. Ver README para el primer arranque." || true
+          gh release upload "$TAG" "Verbasizer-${{ matrix.label }}.zip" --clobber
